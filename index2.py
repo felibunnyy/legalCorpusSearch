@@ -3,8 +3,8 @@ import re
 import nltk
 import sys
 import getopt
+import math
 
-from postlist import *
 import pickle
 
 from collections import OrderedDict
@@ -18,7 +18,46 @@ import pip
 
 sys.setrecursionlimit(50000)
 
-# python3 index.py -i dataset.csv -d dictionary_file -p postings_file
+def encode_varbyte(n):
+    bytes_needed = math.ceil(n.bit_length() / 7)
+    result = bytearray()
+    for i in range(bytes_needed):
+        byte = n & 0x7F
+        n >>= 7
+        if i != bytes_needed - 1:
+            byte |= 0x80
+        result.append(byte)
+    return bytes(result)
+
+def decode_varbyte(encoded):
+    value = 0
+    shift = 0
+    for byte in encoded:
+        value |= (byte & 0x7F) << shift
+        if byte & 0x80 == 0:
+            break
+        shift += 7
+    return value
+
+def compress_index(index):
+  for key, value in index.items():
+    new_value = []
+    for each_tuple in value:
+      positional_indexes = each_tuple[2]
+      counter_position = positional_indexes[0]
+      encoded_array = [encode_varbyte(positional_indexes[0])]
+      for i in range(1, len(positional_indexes)):
+        real_position = positional_indexes[i]
+        offset = real_position - counter_position
+        counter_position = real_position
+        encoded_array.append(encode_varbyte(offset))
+      encoded_tuple = tuple(encoded_array)
+      new_each_tuple = (each_tuple[0], each_tuple[1], encoded_tuple)
+      new_value.append(new_each_tuple)
+    new_value = tuple(new_value)
+    index[key] = new_value
+      
+# python3 index2.py -i dataset.csv -d dictionary_file -p postings_file
 def install_package(package):
     try:
         importlib.import_module(package)
@@ -54,21 +93,26 @@ def update_index(index, docID, tokens, eachDocId_length_for_normalisation):
     positional_index = 1
 
     for token in tokens:
-        if(token not in index):
-            # Add term to index
-            plist = PostingList()
-            plist.insertNode(docID, positional_index) #first positional index
-            index[token] = plist
-        else:
-            # Update index
-            index[token].insertNode(docID, positional_index)
-        
-        positional_index += 1
+      init_tf = 1
+      if (token not in index):
+          # Add term to index
+          index[token] = [[docID, init_tf, [positional_index]]]
+      else:
+          # Update index
+          last_seen_docId = index[token][-1][0]
+          if (last_seen_docId == docID): #docId already exists in posting list
+            postlist = index[token][-1]
+            postlist[1] += 1
+            postlist[2].append(positional_index)
+          else: #docId is new in posting list
+            index[token].append([docID, init_tf, [positional_index]])
+
+      positional_index += 1
     
-        if (token not in eachDocId_length_for_normalisation):
-            eachDocId_length_for_normalisation[token] = 1
-        else:
-            eachDocId_length_for_normalisation[token] += 1
+      if (token not in eachDocId_length_for_normalisation):
+          eachDocId_length_for_normalisation[token] = 1
+      else:
+          eachDocId_length_for_normalisation[token] += 1
 
 def calculate_normalised_length(eachDocId_length_for_normalisation):
     temp = 0
@@ -87,13 +131,11 @@ def build_index(in_file, out_dict, out_postings):
     data = pd.read_csv(in_file)
     data = data.sort_values('document_id')
     
-    # print(data)
-
     index = {}
     
     final_calculated_normalised_length = {}
+
     full_doc_ids = []
-    
     for idx, row in data.iterrows():
         eachDocId_length_for_normalisation = {}
         docID = row['document_id']
@@ -109,6 +151,8 @@ def build_index(in_file, out_dict, out_postings):
 
         # calculate final_calculated_normalised_length for current docId
         final_calculated_normalised_length[docID] = calculate_normalised_length(eachDocId_length_for_normalisation)
+    index = OrderedDict(sorted(index.items())) # i think optional
+    compress_index(index)
     
     print('finished indexing')
 
@@ -117,17 +161,14 @@ def build_index(in_file, out_dict, out_postings):
 
     output_dict = {} # dictionary with mapping of word to [df, pickle seek value count]
 
-    index = OrderedDict(sorted(index.items()))
     for key, value in index.items():
         temp_item_posting_list = value
-        output_dict[key] = [temp_item_posting_list.df, seek_value_count]
+        output_dict[key] = [len(temp_item_posting_list), seek_value_count]
         pickle.dump(temp_item_posting_list, postlist_file, protocol = 4)
         seek_value_count = postlist_file.tell()
 
     print('finished dumping post file')
-
     full_doc_ids = tuple(full_doc_ids)
-
 
     # postlist_file contains posting list dumped
     with open(out_dict, "wb") as index_file:
