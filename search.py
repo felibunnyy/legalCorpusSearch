@@ -9,6 +9,7 @@ import pickle
 
 from nltk.tokenize import word_tokenize
 from nltk import stem
+from nltk.corpus import stopwords
 import math
 
 from postlist import *
@@ -76,8 +77,7 @@ def phrase_query(phrase_query, in_memory_dictionary, posting_list_file):
     for token in tokens: #preliminary check
         if (token not in in_memory_dictionary): #word: [df, pickle index]
             return relevant_docs
-    
-    
+
     if (len(phrase_query) == 2):
         resulting_pl = phrase_helper(token[0], token[1], in_memory_dictionary, posting_list_file)
         return resulting_pl
@@ -247,7 +247,7 @@ def print_result(result):
         curr = curr.next
     return res.strip()
 
-def run_search(dict_file, postings_file, queries_file, results_file):
+def run_search(dict_file, postings_file, query-file, results_file):
     """
     using the given dictionary file and postings file,
     perform searching on the given queries file and output the results to a file
@@ -262,20 +262,24 @@ def run_search(dict_file, postings_file, queries_file, results_file):
 
     count = 0
 
-    with open(queries_file, 'r') as file:
-        queries = file.readlines()
-        relevant_docs = []
-        for query in queries:
-            print("FOR")
-            print(query)
-            if(count == 0):
-                print('s')
-                result = process_query(query, N, in_memory_dictionary, posting_list_file, final_calculated_normalised_length)
-            else:
-                print('d')
-                relevant_docs.append(queries) # KIV
+    with open(query-file, 'r') as file:
+        temp = file.read().splitlines()
+        query = temp[0]
+        relevant_docs = temp[1:] #given
+        is_boolean_query = False
+        
+        if "AND" in query:
+            is_boolean_query = True
+        
+        if(count == 0):
+            intermediate_docIds = process_query(query, N, in_memory_dictionary, posting_list_file, final_calculated_normalised_length)
+        else:
+            relevant_docs.append(queries) # KIV
             # count += 1
-    
+
+
+            
+        
     results = open(results_file, "w")
     results.write(print_result(result))
     results.close()

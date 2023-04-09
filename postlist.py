@@ -1,6 +1,28 @@
 import math
 
 # Node class
+
+def encode_varbyte(n):
+    bytes_needed = math.ceil(n.bit_length() / 7)
+    result = bytearray()
+    for i in range(bytes_needed):
+        byte = n & 0x7F
+        n >>= 7
+        if i != bytes_needed - 1:
+            byte |= 0x80
+        result.append(byte)
+    return bytes(result)
+
+def decode_varbyte(encoded):
+    value = 0
+    shift = 0
+    for byte in encoded:
+        value |= (byte & 0x7F) << shift
+        if byte & 0x80 == 0:
+            break
+        shift += 7
+    return value
+
 class Node:
     # Function to initialize the node object
     def __init__(self, key, position):
@@ -9,9 +31,10 @@ class Node:
         self.positions = [position]
         self.next = None
         self.skip = None
+        self.currentPosition = position
         
     def addPosition(self, position):
-        self.positions.append(position) #does not check if position already exists (save time)
+        self.positions.append(encode_varbyte(position)) #does not check if position already exists (save time)
     
     # Function to view node
     def __str__(self):
@@ -43,9 +66,9 @@ class PostingList:
         return self.__str__()
 
     # insert to the end of the list since document id is already in sorted order
-    def insertNode(self, data, position = 0):
+    def insertNode(self, data, position):
         if self.head is None:
-            n = Node(data, position)
+            n = Node(data, encode_varbyte(position))
             # n.data = data
             # n.addPosition(position)
             self.head = n
@@ -56,12 +79,16 @@ class PostingList:
         curr = self.tail
         
         if curr.data == data:
-            curr.addPosition(position)
+            last_seen_positional_index_byte = curr.currentPosition
+            last_seen_positional_index_int = decode_varbyte(last_seen_positional_index_byte)
+            offset = position - last_seen_positional_index_int
+            curr.addPosition(offset)
+            curr.currentPosition = encode_varbyte(position)
             curr.tf += 1
             return
         
         if curr.data < data:
-            n = Node(data, position)
+            n = Node(data, encode_varbyte(position))
             curr.next = n
             self.tail = n
             self.df += 1
