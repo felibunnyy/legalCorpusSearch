@@ -17,7 +17,7 @@ from postlist import *
 
 stemmer = stem.PorterStemmer()
 
-# python3 search.py -d dictionary-file -p postings-file -q queries_file.txt -o output-file-of-results
+# python3 search.py -d dictionary_file3 -p postings_file3 -q q1.txt -o output-file-of-results
 
 def encode_varbyte(n):
     bytes_needed = math.ceil(n.bit_length() / 7)
@@ -87,82 +87,80 @@ def phrase_query(phrase_query, in_memory_dictionary, posting_list_file):
         return and_query(commonDocIds_part1, commonDocIds_part2, in_memory_dictionary, posting_list_file)
     else:
         raise TypeError("length of phrase query should be 2 or 3")
-        
+
+def find_results(query, in_memory_dictionary, posting_list_file):
+    tokens = get_term(query)
+    cosine_without_normalisation = {} # docId: second vector, where second vector is a dict {mappingid: 1 + logtf term query value}
+    curr_query_term_freq = {} # maps mappingid to [term freq in entire query, df in index] (for first vector - query)
+    curr_query_term_freq_mapping = {} # maps term to number, where number = mappingid
+
+    current_counter = 0
     
+    for token in tokens:
+        if(token in in_memory_dictionary):
+            seek_val = in_memory_dictionary[token][1]
+            posting_list_file.seek(seek_val)
+            posting_list = pickle.load(posting_list_file)
 
-# def find_results(query, in_memory_dictionary, posting_list_file):
-#     tokens = get_term(query)
-#     cosine_without_normalisation = {} # docId: second vector, where second vector is a dict {mappingid: 1 + logtf term query value}
-#     curr_query_term_freq = {} # maps mappingid to [term freq in entire query, df in index] (for first vector - query)
-#     curr_query_term_freq_mapping = {} # maps term to number, where number = mappingid
-
-#     current_counter = 0
-    
-#     for token in tokens:
-#         if(token in in_memory_dictionary):
-#             seek_val = in_memory_dictionary[token][1]
-#             posting_list_file.seek(seek_val)
-#             posting_list = pickle.load(posting_list_file)
-
-#             if (token in curr_query_term_freq_mapping):
-#                 mappingid = curr_query_term_freq_mapping[token]
-#                 curr_query_term_freq[mappingid][0] += 1
-#             elif (token not in curr_query_term_freq_mapping):
-#                 query_term_df = posting_list.df
-#                 curr_query_term_freq_mapping[token] = current_counter
-#                 mappingid = current_counter
-#                 current_counter += 1
-#                 curr_query_term_freq[mappingid] = [1, query_term_df]
+            if (token in curr_query_term_freq_mapping):
+                mappingid = curr_query_term_freq_mapping[token]
+                curr_query_term_freq[mappingid][0] += 1
+            elif (token not in curr_query_term_freq_mapping):
+                # query_term_df = posting_list.df
+                query_term_df = len(posting_list)
+                curr_query_term_freq_mapping[token] = current_counter
+                mappingid = current_counter
+                current_counter += 1
+                curr_query_term_freq[mappingid] = [1, query_term_df]
             
-#                 # calculation of first (query) vector in dot product(for 'cosine_without_normalisation')
-#                 curr = posting_list.head
-
-#                 while(curr is not None):
-#                     currDocId = curr.data
-#                     if (currDocId not in cosine_without_normalisation):
-#                         cosine_without_normalisation[currDocId] = {}
+                # calculation of first (query) vector in dot product(for 'cosine_without_normalisation')
+        
+                for curr_pointer in range(len(posting_list)):
+                    curr = posting_list[curr_pointer]
+                    currDocId = curr[0]
+                    if (currDocId not in cosine_without_normalisation):
+                        cosine_without_normalisation[currDocId] = {}
                     
-#                     cosine_without_normalisation[currDocId][mappingid] = 1 + math.log10(curr.tf)
-#                     curr = curr.next
+                    cosine_without_normalisation[currDocId][mappingid] = 1 + math.log10(curr[1])
     
-#     return curr_query_term_freq, cosine_without_normalisation
+    return curr_query_term_freq, cosine_without_normalisation
 
-# def calculate_tf_idf(N, curr_query_term_freq, cosine_without_normalisation, final_calculated_normalised_length):
-#     # processing curr_query_term_freq to calculate tf-idf for each unique term in query
-#     for key, value in curr_query_term_freq.items():
-#         tf = 1 + math.log10(value[0])
-#         idf = math.log10(N/value[1])
-#         tf_idf = tf * idf
-#         # update value of each key to tf_idf value
-#         curr_query_term_freq[key] = tf_idf
+def calculate_tf_idf(N, curr_query_term_freq, cosine_without_normalisation, final_calculated_normalised_length):
+    # processing curr_query_term_freq to calculate tf-idf for each unique term in query
+    for key, value in curr_query_term_freq.items():
+        tf = 1 + math.log10(value[0])
+        idf = math.log10(N/value[1])
+        tf_idf = tf * idf
+        # update value of each key to tf_idf value
+        curr_query_term_freq[key] = tf_idf
 
-#     # start calculating cosine similarity for each document
-#     normalised_query_length = 0
-#     for key, value in curr_query_term_freq.items():
-#         normalised_query_length += value**2
-#     normalised_query_length = math.sqrt(normalised_query_length)
+    # start calculating cosine similarity for each document
+    normalised_query_length = 0
+    for key, value in curr_query_term_freq.items():
+        normalised_query_length += value**2
+    normalised_query_length = math.sqrt(normalised_query_length)
 
-#     for key, value in cosine_without_normalisation.items():
-#         counter = 0
-#         for key2, value2 in value.items(): # doing dot product before normalising
-#             counter += curr_query_term_freq[key2] * value2 # query val * doc val for common terms between query and doc
+    for key, value in cosine_without_normalisation.items():
+        counter = 0
+        for key2, value2 in value.items(): # doing dot product before normalising
+            counter += curr_query_term_freq[key2] * value2 # query val * doc val for common terms between query and doc
         
-#         # divide by the normalising length in 'final_calculated_normalised_length' (for doc vec length)
-#         counter /= final_calculated_normalised_length[key] # key = docId
+        # divide by the normalising length in 'final_calculated_normalised_length' (for doc vec length)
+        counter /= final_calculated_normalised_length[key] # key = docId
         
-#         # divide by the normalising length, normalised_query_length (for query vec length)
-#         counter /= normalised_query_length
+        # divide by the normalising length, normalised_query_length (for query vec length)
+        counter /= normalised_query_length
         
-#         # take normalised counter value and replace it with value in 'cosine_without_normalisation'
-#         cosine_without_normalisation[key] = counter
+        # take normalised counter value and replace it with value in 'cosine_without_normalisation'
+        cosine_without_normalisation[key] = counter
     
-#     sorted_result = sorted(cosine_without_normalisation.items(), key=lambda x:x[1])
+    sorted_result = sorted(cosine_without_normalisation.items(), key=lambda x:x[1], reverse = True)
 
-#     result = PostingList()
-#     for item in sorted_result:
-#         result.insertNode(item[0])
+    result = []
+    for item in sorted_result:
+        result.append(item[0])
 
-#     return result
+    return result
 
 def and_query_on_tuple_phrase_query(first, second, in_memory_dictionary, p):
     if (type(first) != tuple):
@@ -201,7 +199,8 @@ def and_query_on_tuple_phrase_query(first, second, in_memory_dictionary, p):
                 raise KeyError
             else:
                 for i in to_traverse_positional_index:
-                    if (i + 1) in other_positional_index:
+                    decoded_value = decode_varbyte(i)
+                    if encode_varbyte(decoded_value + 1) in other_positional_index:
                         common_docIds.addNode(docId_to_traverse)
                         break
                 pointer_other += 1
@@ -306,7 +305,7 @@ def and_query(first, second, in_memory_dictionary, p):
 #         curr = curr.next
 #     return res.strip()
 
-def run_search(dict_file, postings_file, query-file, results_file):
+def run_search(dictionary_file, postings_file, query_file, results_file):
     """
     using the given dictionary file and postings file,
     perform searching on the given queries file and output the results to a file
@@ -315,42 +314,66 @@ def run_search(dict_file, postings_file, query-file, results_file):
     startTime = time.time()
     with open(dictionary_file, 'rb') as f:
         in_memory_dictionary = pickle.load(f)
-        N = pickle.load(f)
+        N = len(pickle.load(f))
         final_calculated_normalised_length = pickle.load(f)
 
     posting_list_file = open(postings_file, 'rb')
 
     count = 0
 
-    with open(query-file, 'r') as file:
+    with open(query_file, 'r') as file:
         temp = file.read().splitlines()
         query = temp[0]
         relevant_docs = temp[1:] #given
         
         set_rel_docs_overall = -1
         #preliminary filter for phrasal queries
+        query_after_processing = ""
         if "AND" in query:
             queries = query.split(" AND ")
             for each_query in queries:
                 if each_query[0] == each_query[-1] and each_query[0] == '"' or each_query[0] == "'":
                     #preprocess query
                     processed_query = ''.join(char for char in each_query if char.isalnum() or char.isspace())
+                    query_after_processing += processed_query
+                    query_after_processing += ' '
                     if set_rel_docs_for_curr_phrase == -1:
                         set_rel_docs_for_curr_phrase = phrase_query(processed_query, in_memory_dictionary, posting_list_file)
                     else:
                         set_rel_docs_overall = and_query(set_rel_docs_for_curr_phrase, set_rel_docs_overall, in_memory_dictionary, posting_list_file)
-        
-        if (set_rel_docs_overall = -1): #means not boolean query initially (no preliminary filter done)
-            
-            
-            
-
+                        
+            query_after_processing = query_after_processing[:-1] #to delete last spacing
 
             
+        else:
+            query_after_processing = ''.join(char for char in query if char.isalnum() or char.isspace())
         
-    results = open(results_file, "w")
-    results.write(print_result(result))
-    results.close()
+        curr_query_term_freq, cosine_without_normalisation = find_results(query_after_processing, in_memory_dictionary, posting_list_file)
+        results = calculate_tf_idf(N, curr_query_term_freq, cosine_without_normalisation, final_calculated_normalised_length)
+        
+        docs_not_selected_in_prelim_filter = []
+        docs_selected_in_prelim_filter = []
+        
+        if (set_rel_docs_overall != -1): #means boolean query initially (preliminary filter done)
+            #make set_rel_docs_overall as an array instead of posting list
+            set_rel_docs_overall_asArray = []
+            curr = set_rel_docs_overall.head
+            while curr is not None:
+                set_rel_docs_overall_asArray.append(curr.data)
+                curr = curr.next
+                
+            for each_result in results:
+                if each_result in set_rel_docs_overall_asArray:
+                    docs_selected_in_prelim_filter.append(each_result)
+                else:
+                    docs_not_selected_in_prelim_filter.append(each_result)
+                
+            #combine the rankings of docs_selected_in_prelim_filter and docs_not_selected_in_prelim_filter
+            results = docs_selected_in_prelim_filter + docs_not_selected_in_prelim_filter
+
+    f_results = open(results_file, "w")
+    f_results.write(str(results))
+    f_results.close()
     
     print ("Execution Time:" + str(time.time() - startTime) + "s")
     
