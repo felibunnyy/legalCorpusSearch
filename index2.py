@@ -85,6 +85,11 @@ def get_term(text):
         result.append(term)
     return result
 
+def preprocess_text(text_to_process):
+    text_to_process = text_to_process.replace('\n', ' ')
+    text_to_process = ''.join(char for char in text_to_process if char.isalnum() or char.isspace())
+    return text_to_process
+
 def update_index(index, docID, tokens, eachDocId_length_for_normalisation):
     """
     Add token to index, calculate length of doc
@@ -134,17 +139,49 @@ def build_index(in_file, out_dict, out_postings):
     index = {}
     
     final_calculated_normalised_length = {}
-
+                
     full_doc_ids = []
+    courts_most_impt = ["SG Court of Appeal", "SG Privy Council", "UK House of Lords", "UK Supreme Court",
+                    "High Court of Australia", "CA Supreme Court"]
+
+    courts_less_impt = ["SG High Court", "Singapore International Commercial Court", "HK High Court",
+                    "HK Court of First Instance", "UK Crown Court", "UK Court of Appeal", "UK High Court", "Federal Court of Australia",
+                    "NSW Court of Appeal", "NSW Court of Criminal Appeal", "NSW Supreme Court"] #but still more important than those not even listed
+    
+    #court_mappings = score of 2 if it is under courts_most_impt, score of 1 if it is under courts_less_impt, score of 0 otherwise
+    zones_and_fields_dict = {} #maps docId to tuple of 1. dict of word in title to tf
+                                                       #2. court score
+                                                       #3. date posted tuple of 3 values (yyyy, mm, dd)
+    
     for idx, row in data.iterrows():
         eachDocId_length_for_normalisation = {}
         docID = row['document_id']
+        title = row['title']
+        court = row['court']
+        date_posted = row['date_posted']
+        extracted_date = date_posted[:10]
+        
+        court_score = 0
+        if (court in courts_most_impt):
+            court_score = 2
+        elif (court in courts_less_impt):
+            court_score = 1
+        
+        processed_title = preprocess_text(title)
+        processed_title_tokens = get_term(processed_title)
+        title_array = [] #not keeping track of tf, but unique words that appear
+        for word in processed_title_tokens:
+            if word not in title_array:
+                title_array.append(word)
+        title_tuple = tuple(title_array)
+        zones_and_fields_dict[docID] = (title_tuple, court_score, date_posted)
+        
+        
         full_doc_ids.append(docID)
 
         #preprocess text:
         text_to_process = row['content']
-        text_to_process = text_to_process.replace('\n', ' ')
-        text_to_process = ''.join(char for char in text_to_process if char.isalnum() or char.isspace())
+        text_to_process = preprocess_text(text_to_process) #processing done
         
         tokens = get_term(text_to_process)
         update_index(index, docID, tokens, eachDocId_length_for_normalisation)
@@ -175,6 +212,7 @@ def build_index(in_file, out_dict, out_postings):
         pickle.dump(output_dict, index_file, protocol = 4)
         pickle.dump(full_doc_ids, index_file, protocol = 4)
         pickle.dump(final_calculated_normalised_length, index_file, protocol = 4)
+        pickle.dump(zones_and_fields_dict, index_file, protocol = 4)
     
     print('done')
 
