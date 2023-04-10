@@ -6,6 +6,7 @@ import getopt
 import math
 
 import pickle
+import time
 
 from collections import OrderedDict
 
@@ -57,7 +58,7 @@ def compress_index(index):
     new_value = tuple(new_value)
     index[key] = new_value
       
-# python3 index2.py -i dataset.csv -d dictionary_file -p postings_file
+# python3 index2.py -i dataset.csv -d dictionary_file4 -p postings_file4
 def install_package(package):
     try:
         importlib.import_module(package)
@@ -132,7 +133,8 @@ def build_index(in_file, out_dict, out_postings):
     then output the dictionary file and postings file
     """
     print('indexing...')
-
+    startTime = time.time()
+    
     data = pd.read_csv(in_file)
     data = data.sort_values('document_id')
     
@@ -141,6 +143,9 @@ def build_index(in_file, out_dict, out_postings):
     final_calculated_normalised_length = {}
                 
     full_doc_ids = []
+    
+    ##ZONES AND FIELDS
+    # note: court name processing is only 'to_lower'
     courts_most_impt = ["SG Court of Appeal", "SG Privy Council", "UK House of Lords", "UK Supreme Court",
                     "High Court of Australia", "CA Supreme Court"]
 
@@ -150,8 +155,22 @@ def build_index(in_file, out_dict, out_postings):
     
     #court_mappings = score of 2 if it is under courts_most_impt, score of 1 if it is under courts_less_impt, score of 0 otherwise
     zones_and_fields_dict = {} #maps docId to tuple of 1. dict of word in title to tf
-                                                       #2. court score
+                                                       #2. court name (lowercase)
                                                        #3. date posted tuple of 3 values (yyyy, mm, dd)
+    court_name_to_docId_mapping = {} #maps court name to docId
+    court_mapping = {} # maps name of court to a special id
+    court_score_mapping = {} # maps special id to court importance score
+    court_counter_for_mapping = 1
+    for court in courts_most_impt:
+        court = court.lower()
+        court_mapping[court] = court_counter_for_mapping
+        court_score_mapping[court_counter_for_mapping] = 2
+        court_counter_for_mapping += 1
+    for court in courts_less_impt:
+        court = court.lower()
+        court_mapping[court] = court_counter_for_mapping
+        court_score_mapping[court_counter_for_mapping] = 1
+        court_counter_for_mapping += 1
     
     for idx, row in data.iterrows():
         eachDocId_length_for_normalisation = {}
@@ -161,11 +180,13 @@ def build_index(in_file, out_dict, out_postings):
         date_posted = row['date_posted']
         extracted_date = date_posted[:10]
         
-        court_score = 0
-        if (court in courts_most_impt):
-            court_score = 2
-        elif (court in courts_less_impt):
-            court_score = 1
+        ###court_name_to_docId_mapping
+        if court in courts_less_impt or court in courts_most_impt:
+            if court.lower() not in court_name_to_docId_mapping:
+                court_name_to_docId_mapping[court.lower()] = [docID]
+            else:
+                court_name_to_docId_mapping[court.lower()].append(docID)
+        ###
         
         processed_title = preprocess_text(title)
         processed_title_tokens = get_term(processed_title)
@@ -174,7 +195,7 @@ def build_index(in_file, out_dict, out_postings):
             if word not in title_array:
                 title_array.append(word)
         title_tuple = tuple(title_array)
-        zones_and_fields_dict[docID] = (title_tuple, court_score, date_posted)
+        zones_and_fields_dict[docID] = (title_tuple, court.lower(), extracted_date)
         
         
         full_doc_ids.append(docID)
@@ -213,8 +234,12 @@ def build_index(in_file, out_dict, out_postings):
         pickle.dump(full_doc_ids, index_file, protocol = 4)
         pickle.dump(final_calculated_normalised_length, index_file, protocol = 4)
         pickle.dump(zones_and_fields_dict, index_file, protocol = 4)
+        pickle.dump(court_mapping, index_file, protocol = 4)
+        pickle.dump(court_score_mapping, index_file, protocol = 4)
+        pickle.dump(court_name_to_docId_mapping, index_file, protocol = 4)
     
     print('done')
+    print ("Execution Time:" + str(time.time() - startTime) + "s")
 
 input_file = output_file_dictionary = output_file_postings = None
 
