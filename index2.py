@@ -57,8 +57,14 @@ def compress_index(index):
       new_value.append(new_each_tuple)
     new_value = tuple(new_value)
     index[key] = new_value
+    
+def encode_tuple(tuple_val):
+    # encode each integer in the tuple separately
+    encoded_values = [encode_varbyte(val) for val in tuple_val]
+    # concatenate the byte arrays and return the result
+    return b"".join(encoded_values)    
       
-# python3 index2.py -i dataset.csv -d dictionary_file4 -p postings_file4
+# python3 index2.py -i dataset.csv -d dictionary_file10 -p postings_file10
 def install_package(package):
     try:
         importlib.import_module(package)
@@ -206,10 +212,12 @@ def build_index(in_file, out_dict, out_postings):
         
         tokens = get_term(text_to_process)
         update_index(index, docID, tokens, eachDocId_length_for_normalisation)
+        
 
         # calculate final_calculated_normalised_length for current docId
         final_calculated_normalised_length[docID] = calculate_normalised_length(eachDocId_length_for_normalisation)
     index = OrderedDict(sorted(index.items())) # i think optional
+    
     compress_index(index)
     
     print('finished indexing')
@@ -218,25 +226,70 @@ def build_index(in_file, out_dict, out_postings):
     seek_value_count = 0
 
     output_dict = {} # dictionary with mapping of word to [df, pickle seek value count]
-
+    
+    ###relevance query
+    relevance_query_dict = {} #maps doc_id to list of (unique words, tf) appearing in query 
+    
+    '''
+    {
+        'first': (
+                    b'\x01\x02',    # encoded value of (1, 2)
+                    b'\x01\x04',    # encoded value of (1, 4)
+                    b'\x02\x03'     # encoded value of (2, 3)
+                ),
+        'second': (
+                    b'\x02\x01',    # encoded value of (2, 1)
+                    b'\x01\x04',    # encoded value of (1, 4)
+                    b'\x03\x01',    # encoded value of (3, 1)
+                    b'\x09\x00'     # encoded value of (9, 0)
+                    )
+    }
+    '''
+    mapping_id_counter = 0
+    N = len(full_doc_ids)
+    
     for key, value in index.items():
         temp_item_posting_list = value
-        output_dict[key] = [len(temp_item_posting_list), seek_value_count]
-        pickle.dump(temp_item_posting_list, postlist_file, protocol = 4)
+        output_dict[key] = [len(temp_item_posting_list), seek_value_count, mapping_id_counter]
+        
+        ###relevance query
+        ###ADDON: more aggressive compression to not even bother storing terms with idf < 0.1
+        idf_term = math.log10(N/len(temp_item_posting_list))
+        if (idf_term >= 0.1):
+            for curr_tuple in temp_item_posting_list: #each tuple has (doc_id, term_freq, positional_indexes)
+                doc_id = curr_tuple[0]
+                tf = curr_tuple[1]
+                if doc_id not in relevance_query_dict:
+                    relevance_query_dict[doc_id] = [(mapping_id_counter, tf)] #(id, tf)
+                else:
+                    relevance_query_dict[doc_id].append((mapping_id_counter, tf))
+            
+            mapping_id_counter += 1
+        ###
+        pickle.dump(temp_item_posting_list, postlist_file, protocol = pickle.HIGHEST_PROTOCOL)
         seek_value_count = postlist_file.tell()
+        
+    ###compress relevance_query_dict (var byte encoding)
+    for key, value in relevance_query_dict.items():
+        encoded_values = tuple(encode_tuple(tuple_val) for tuple_val in value)
+        relevance_query_dict[key] = encoded_values
 
     print('finished dumping post file')
     full_doc_ids = tuple(full_doc_ids)
 
     # postlist_file contains posting list dumped
     with open(out_dict, "wb") as index_file:
-        pickle.dump(output_dict, index_file, protocol = 4)
-        pickle.dump(full_doc_ids, index_file, protocol = 4)
-        pickle.dump(final_calculated_normalised_length, index_file, protocol = 4)
-        pickle.dump(zones_and_fields_dict, index_file, protocol = 4)
-        pickle.dump(court_mapping, index_file, protocol = 4)
-        pickle.dump(court_score_mapping, index_file, protocol = 4)
-        pickle.dump(court_name_to_docId_mapping, index_file, protocol = 4)
+        pickle.dump(output_dict, index_file, protocol = pickle.HIGHEST_PROTOCOL)
+        pickle.dump(full_doc_ids, index_file, protocol = pickle.HIGHEST_PROTOCOL)
+        final_calculated_normalised_length = [] #useless
+        pickle.dump(final_calculated_normalised_length, index_file, protocol = pickle.HIGHEST_PROTOCOL)
+        pickle.dump(zones_and_fields_dict, index_file, protocol = pickle.HIGHEST_PROTOCOL)
+        pickle.dump(court_mapping, index_file, protocol = pickle.HIGHEST_PROTOCOL)
+        pickle.dump(court_score_mapping, index_file, protocol = pickle.HIGHEST_PROTOCOL)
+        # pickle.dump(court_name_to_docId_mapping, index_file, protocol = 4)
+        
+        ##dump relevance_query_dict
+        pickle.dump(relevance_query_dict, index_file, protocol = pickle.HIGHEST_PROTOCOL)
     
     print('done')
     print ("Execution Time:" + str(time.time() - startTime) + "s")
