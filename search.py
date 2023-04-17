@@ -24,7 +24,7 @@ courts_to_check = ["SG Court of Appeal", "SG Privy Council", "UK House of Lords"
                 "NSW Court of Appeal", "NSW Court of Criminal Appeal", "NSW Supreme Court"]
 
 courts_to_check_lower = []
-# python3 search.py -d dictionary_file8 -p postings_file8 -q q1.txt -o output-file-of-results
+# python3 search.py -d dictionary_file10 -p postings_file10 -q q1.txt -o output-file-of-results
 
 def encode_varbyte(n):
     bytes_needed = math.ceil(n.bit_length() / 7)
@@ -133,7 +133,10 @@ def find_results(query, in_memory_dictionary, posting_list_file):
     curr_query_term_freq_mapping = {} # maps term to number, where number = mappingid
 
     current_counter = 0
-    
+# 6807771
+# 4001247
+# 3992148
+          
     for token in tokens:
         if(token in in_memory_dictionary):
             seek_val = in_memory_dictionary[token][1]
@@ -165,18 +168,18 @@ def find_results(query, in_memory_dictionary, posting_list_file):
 
 def calculate_tf_idf(N, curr_query_term_freq, cosine_without_normalisation, final_calculated_normalised_length):
     # processing curr_query_term_freq to calculate tf-idf for each unique term in query
-    print("curr_query_term_freq")
-    print(curr_query_term_freq)
+    # print("curr_query_term_freq")
+    # print(curr_query_term_freq)
     for key, value in curr_query_term_freq.items():
         tf = 1 + math.log10(value[0])
         idf = math.log10(N/value[1])
-        #CHECK: IDF < 0.15
-        if (idf < 0.15):
+        #CHECK: IDF < 0.1
+        if (idf < 0.1):
             idf = 0
         tf_idf = tf * idf
         # update value of each key to tf_idf value
         curr_query_term_freq[key] = tf_idf
-    print(curr_query_term_freq)
+    # print(curr_query_term_freq)
     # start calculating cosine similarity for each document
     
     normalised_query_length = 0
@@ -211,8 +214,8 @@ def calculate_tf_idf(N, curr_query_term_freq, cosine_without_normalisation, fina
     # print(values)
 
     # return result
-    print("score_dict")
-    print(cosine_without_normalisation)
+    # print("score_dict")
+    # print(cosine_without_normalisation)
     return cosine_without_normalisation
 
 def and_query_on_tuple_phrase_query(first, second, in_memory_dictionary, p):
@@ -354,8 +357,8 @@ def helperSearch(query, in_memory_dictionary, posting_list_file, final_calculate
         query_after_processing = ''.join(char for char in query if char.isalnum() or char.isspace())
         
     curr_query_term_freq, cosine_without_normalisation, curr_query_term_freq_mapping = find_results(query_after_processing, in_memory_dictionary, posting_list_file)
-    print("curr_query_term_freq")
-    print(curr_query_term_freq)
+    # print("curr_query_term_freq")
+    # print(curr_query_term_freq)
     score_dict = calculate_tf_idf(N, curr_query_term_freq, cosine_without_normalisation, final_calculated_normalised_length) #at this point in time, score of each relevant docId is just tf-idf
         
     docs_not_selected_in_prelim_filter = []
@@ -394,18 +397,18 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
         in_memory_dictionary = pickle.load(f)
         full_docIds = pickle.load(f)
         N = len(full_docIds)
-        print("total num docs", N)
+        # print("total num docs", N)
         final_calculated_normalised_length = pickle.load(f)
         
         zones_and_fields_dict = pickle.load(f)
         court_mapping = pickle.load(f)
         court_score_mapping = pickle.load(f)
-        court_name_to_docId_mapping = pickle.load(f)
+        # court_name_to_docId_mapping = pickle.load(f)
         relevance_query_dict = pickle.load(f)
         
-        print("RELEVANCE QUERY DICT")
+        # print("RELEVANCE QUERY DICT")
         # print(relevance_query_dict)
-    print(len(in_memory_dictionary))
+    # print(len(in_memory_dictionary))
     posting_list_file = open(postings_file, 'rb')
 
     count = 0
@@ -414,7 +417,7 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
         temp = file.read().splitlines()
         query = temp[0]
         relevant_docs = temp[1:] #given
-        print(relevant_docs)
+        # print(relevant_docs)
         score_dict, curr_query_term_freq, curr_query_term_freq_mapping = helperSearch(query, in_memory_dictionary, posting_list_file, final_calculated_normalised_length, court_mapping, court_score_mapping, zones_and_fields_dict, N)
         results = sort_score_dict_by_score_descending(score_dict)
     
@@ -424,6 +427,7 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
             if (reformulated_query != False):
                 score_dict, curr_query_term_freq, curr_query_term_freq_mapping = helperSearch(reformulated_query, in_memory_dictionary, posting_list_file, final_calculated_normalised_length, court_mapping, court_score_mapping, zones_and_fields_dict, N)
                 results = sort_score_dict_by_score_descending(score_dict)
+            
         """
         ###find non_relevant_docs_from_initial_search and relevant_docs_from_initial_search for rocchio's later
         non_relevant_docs_from_intial_search = []
@@ -441,8 +445,8 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
             non_relevant_docs_from_initial_search += results[-diff:]
         """                                
             
-        if len(results) > 4000:
-            results = results[:4000]
+        if len(results) > 1700:
+            results = results[:1700]
         
         """
         ###use rocchio's formula here
@@ -493,9 +497,11 @@ def perform_relevance_query(curr_query_term_freq, curr_query_term_freq_mapping, 
     #added sorted in_memory_dict    
     in_memory_dictionary_sorted = dict(sorted(in_memory_dictionary.items(), key=lambda item: item[1][2]))
     in_memory_dictionary_sorted_list = [(key, value) for key, value in in_memory_dictionary_sorted.items()]
-    
     for curr_rel_doc in relevant_docs:
+    
         curr_rel_doc_int = int(curr_rel_doc) #convert from string to integer
+        #ACCOUNT FOR WHEN CURR_REL_DOC_INT NOT IN RELEVANCE_QUERY_DICT
+        # if curr_rel_doc_int in relevance_query_dict:
         tuple_of_uniqueWordId_termFreqs = relevance_query_dict[curr_rel_doc_int]
         temp_storage_relDocs = {} #temp storage of tf-idf values before normalisation. so we can add to rel_docs_vector after normalising
         normalisation_counter = 0
@@ -544,6 +550,7 @@ def perform_relevance_query(curr_query_term_freq, curr_query_term_freq_mapping, 
     heapq.heapify(value_list)
     how_many = min(20, len(value_list))
     top_values = heapq.nlargest(how_many, value_list)
+    print(top_values)
     min_value = top_values[how_many - 1][0]
     while min_value == 0:
         how_many -= 1
@@ -574,8 +581,8 @@ def perform_relevance_query(curr_query_term_freq, curr_query_term_freq_mapping, 
 def relevance_query_calculate_tf_idf_nonNormalised (tf, df, N):
         tf = 1 + math.log10(tf)
         idf = math.log10(N/df)
-        #CHECK: IDF < 0.15
-        if (idf < 0.15):
+        #CHECK: IDF < 0.1
+        if (idf < 0.1):
             idf = 0
         tf_idf = tf * idf
         return tf_idf
