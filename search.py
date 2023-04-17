@@ -449,13 +449,6 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
                 score_dict, curr_query_term_freq, curr_query_term_freq_mapping = helperSearch(reformulated_pseudoquery, in_memory_dictionary, posting_list_file, final_calculated_normalised_length, court_mapping, court_score_mapping, zones_and_fields_dict, N)
                 results = sort_score_dict_by_score_descending(score_dict)
             
-                
-            
-        
-    
-        
-                                        
-            
         # if len(results) > 1700:
         #     results = results[:1700]
         
