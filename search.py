@@ -566,7 +566,7 @@ def perform_relevance_query(curr_query_term_freq, curr_query_term_freq_mapping, 
                 tf = ls[0]
             else:
                 id, tf = decode_varbyte_string(var_byte_string)
-            word = in_memory_dictionary_sorted_list[id][0]
+            word = in_memory_dictionary_sorted_list[id + 1][0] #change id to id + 1 for change in dictionary 14 (mapping_id_counter init = 1)
             df = in_memory_dictionary[word][0]
             curr_tfIdf = relevance_query_calculate_tf_idf_nonNormalised(tf, df, N)
             temp_storage_relDocs[word] = curr_tfIdf
