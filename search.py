@@ -421,13 +421,13 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
         score_dict, curr_query_term_freq, curr_query_term_freq_mapping = helperSearch(query, in_memory_dictionary, posting_list_file, final_calculated_normalised_length, court_mapping, court_score_mapping, zones_and_fields_dict, N)
         results = sort_score_dict_by_score_descending(score_dict)
     
-        ###perform relevance queryid_to
+        ###perform relevance query if len(relevant_docs) > 0
         if (len(relevant_docs) > 0):
             reformulated_query = perform_relevance_query(curr_query_term_freq, curr_query_term_freq_mapping, relevant_docs, in_memory_dictionary, relevance_query_dict, N)
             if (reformulated_query != False):
                 score_dict, curr_query_term_freq, curr_query_term_freq_mapping = helperSearch(reformulated_query, in_memory_dictionary, posting_list_file, final_calculated_normalised_length, court_mapping, court_score_mapping, zones_and_fields_dict, N)
                 results = sort_score_dict_by_score_descending(score_dict)
-            
+        
         """
         ###find non_relevant_docs_from_initial_search and relevant_docs_from_initial_search for rocchio's later
         non_relevant_docs_from_intial_search = []
