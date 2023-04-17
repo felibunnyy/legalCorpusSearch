@@ -254,15 +254,15 @@ def build_index(in_file, out_dict, out_postings):
         
         ###relevance query
         ###ADDON: more aggressive compression to not even bother storing terms with idf < 0.1
-        # idf_term = math.log10(N/len(temp_item_posting_list))
-        # if (idf_term >= 0.1):
-        for curr_tuple in temp_item_posting_list: #each tuple has (doc_id, term_freq, positional_indexes)
-            doc_id = curr_tuple[0]
-            tf = curr_tuple[1]
-            if doc_id not in relevance_query_dict:
-                relevance_query_dict[doc_id] = [(mapping_id_counter, tf)] #(id, tf)
-            else:
-                relevance_query_dict[doc_id].append((mapping_id_counter, tf))
+        idf_term = math.log10(N/len(temp_item_posting_list))
+        if (idf_term >= 0.1):
+            for curr_tuple in temp_item_posting_list: #each tuple has (doc_id, term_freq, positional_indexes)
+                doc_id = curr_tuple[0]
+                tf = curr_tuple[1]
+                if doc_id not in relevance_query_dict:
+                    relevance_query_dict[doc_id] = [(mapping_id_counter, tf)] #(id, tf)
+                else:
+                    relevance_query_dict[doc_id].append((mapping_id_counter, tf))
             
         mapping_id_counter += 1
         ###
