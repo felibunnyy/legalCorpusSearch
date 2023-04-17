@@ -9,7 +9,7 @@ import pickle
 
 from nltk.tokenize import word_tokenize
 from nltk import stem
-from nltk.corpus import stopwords
+from nltk.corpus import stopwords, wordnet
 import math
 import time
 import heapq
@@ -84,8 +84,8 @@ def preprocess_text(text_to_process):
     return text_to_process
 
 def phrase_helper_getRelevantDocs(first, second, in_memory_dictionary, posting_list_file): #returns a pl of relevant docs
-    print("here")
-    print(in_memory_dictionary[first])
+    # print("here")
+    # print(in_memory_dictionary[first])
     temp_df1, temp_pickled_index1, unique_id = in_memory_dictionary[first]
     posting_list_file.seek(temp_pickled_index1)
     temp_pl1 = pickle.load(posting_list_file)
@@ -133,10 +133,7 @@ def find_results(query, in_memory_dictionary, posting_list_file):
     curr_query_term_freq_mapping = {} # maps term to number, where number = mappingid
 
     current_counter = 0
-# 6807771
-# 4001247
-# 3992148
-          
+
     for token in tokens:
         if(token in in_memory_dictionary):
             seek_val = in_memory_dictionary[token][1]
@@ -173,8 +170,8 @@ def calculate_tf_idf(N, curr_query_term_freq, cosine_without_normalisation, fina
     for key, value in curr_query_term_freq.items():
         tf = 1 + math.log10(value[0])
         idf = math.log10(N/value[1])
-        #CHECK: IDF < 0.1
-        if (idf < 0.1):
+        #CHECK: IDF < 0.25
+        if (idf < 0.25):
             idf = 0
         tf_idf = tf * idf
         # update value of each key to tf_idf value
@@ -423,30 +420,44 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
     
         ###perform relevance query if len(relevant_docs) > 0
         if (len(relevant_docs) > 0):
-            reformulated_query = perform_relevance_query(curr_query_term_freq, curr_query_term_freq_mapping, relevant_docs, in_memory_dictionary, relevance_query_dict, N)
-            if (reformulated_query != False):
+            weight_alpha = 0.25
+            weight_beta = 1 - weight_alpha
+            reformulated_query = perform_relevance_query(curr_query_term_freq, curr_query_term_freq_mapping, relevant_docs, in_memory_dictionary, relevance_query_dict, N, weight_alpha, weight_beta)
+            if (reformulated_query != False): #do i perform query expansion on original query or what
+                reformulated_query_after_query_expansion = query_expansion(reformulated_query, in_memory_dictionary, N, posting_list_file)
+                print(reformulated_query_after_query_expansion)
                 score_dict, curr_query_term_freq, curr_query_term_freq_mapping = helperSearch(reformulated_query, in_memory_dictionary, posting_list_file, final_calculated_normalised_length, court_mapping, court_score_mapping, zones_and_fields_dict, N)
                 results = sort_score_dict_by_score_descending(score_dict)
+        else: ###perform pseudorelevance feedback
+            ###find non_relevant_docs_from_initial_search and relevant_docs_from_initial_search for rocchio's later
+            # non_relevant_docs_from_intial_search = []
         
-        """
-        ###find non_relevant_docs_from_initial_search and relevant_docs_from_initial_search for rocchio's later
-        non_relevant_docs_from_intial_search = []
-        length_non_relevant_docs_from_initial_search = 0
-        for docid in full_docIds:
-            if length_non_relevant_docs_from_initial_search < 2000:
-                if docid not in results:
-                    non_relevant_docs_from_intial_search.append(docid)
-            else:
-                break
+            # for docid in full_docIds:
+            #     if len(non_relevant_docs_from_intial_search) < 200:
+            #         if docid not in results:
+            #             non_relevant_docs_from_intial_search.append(docid)
+            #     else:
+            #         break
+                
+            pseudorelevant_docs = results[:min(200, len(results))]
+            weight_alpha = 0.5
+            weight_beta = 1 - weight_alpha
+            reformulated_pseudoquery = perform_relevance_query(curr_query_term_freq, curr_query_term_freq_mapping, pseudorelevant_docs, in_memory_dictionary, relevance_query_dict, N, weight_alpha, weight_beta)
+            if (reformulated_pseudoquery != False): #do i perform query expansion on original query or what
+                # reformulated_pseudoquery_after_query_expansion = query_expansion(reformulated_pseudoquery, in_memory_dictionary, N, posting_list_file)
+                # print(reformulated_pseudoquery_after_query_expansion)
+                score_dict, curr_query_term_freq, curr_query_term_freq_mapping = helperSearch(reformulated_pseudoquery, in_memory_dictionary, posting_list_file, final_calculated_normalised_length, court_mapping, court_score_mapping, zones_and_fields_dict, N)
+                results = sort_score_dict_by_score_descending(score_dict)
             
-        if length_non_relevant_docs_from_initial_search < 2000:
-            #take from end of results
-            diff = 2000 - length_non_relevant_docs_from_initial_search
-            non_relevant_docs_from_initial_search += results[-diff:]
-        """                                
+                
             
-        if len(results) > 1700:
-            results = results[:1700]
+        
+    
+        
+                                        
+            
+        # if len(results) > 1700:
+        #     results = results[:1700]
         
         """
         ###use rocchio's formula here
@@ -463,12 +474,59 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
     
     print ("Execution Time:" + str(time.time() - startTime) + "s")
 
+### query expansion
+def query_expansion(reformulated_query, in_memory_dictionary, N, posting_list_file):
+    tokens = reformulated_query.split(" ")
+    dict = {}
+    for token in tokens:
+        if token not in dict:
+            dict[token] = 1
+        else:
+            dict[token] += 1
+    
+    for token, count in dict.items():
+        # print(token)
+        if token in in_memory_dictionary and count >= 4:
+            doc_freq = in_memory_dictionary[token][0]
+            # posting_list_file.seek()
+            # doc_freq = len(postlist)
+            token_idf = math.log10(N/doc_freq)
+            # print(token, token_idf)
+            if (token_idf >= 0.95):
+                #perform query expansion
+                synonyms = set()
+                synsets = wordnet.synsets(token)
+                for synset in synsets:
+                    for lemma in synset.lemmas():
+                        if ("_" not in lemma.name() and "-" not in lemma.name()): #artificial filtering
+                            synonyms.add(lemma.name())
+                
+                processed_synonyms = set()
+                for i in synonyms:
+                    processed_i = ''.join(char for char in i if char.isalnum() or char.isspace())
+                    processed_i = stemmer.stem(processed_i)
+                    processed_i = processed_i.lower()
+                    if (processed_i != token):
+                        processed_synonyms.add(processed_i)
+        
+                num_additions = math.floor(count/4)
+                # print(token)
+                # print("synonyms")
+                # print(processed_synonyms)
+                # print(num_additions)
+                for i in range(num_additions):
+                    for j in processed_synonyms:
+                        reformulated_query += ' '
+                        reformulated_query += j
+    return reformulated_query
+                
+            
 ###relevance query (not so sure)
-def perform_relevance_query(curr_query_term_freq, curr_query_term_freq_mapping, relevant_docs, in_memory_dictionary, relevance_query_dict, N):
+def perform_relevance_query(curr_query_term_freq, curr_query_term_freq_mapping, relevant_docs, in_memory_dictionary, relevance_query_dict, N, weight_alpha, weight_beta):
     #tunable weights, weight_alpha + weight_beta == 1
-    weight_alpha = 0.25
-    weight_beta = 1 - weight_alpha
     num_rel_docs = len(relevant_docs)
+    # print("docs")
+    # print(relevant_docs)
     
     num_unique_terms_index = len(in_memory_dictionary)
     term_to_index_mapping = {} #{"hi": 3} means "hi" is the index 3 of query_vector and rel_docs_vector
@@ -501,12 +559,20 @@ def perform_relevance_query(curr_query_term_freq, curr_query_term_freq_mapping, 
     
         curr_rel_doc_int = int(curr_rel_doc) #convert from string to integer
         #ACCOUNT FOR WHEN CURR_REL_DOC_INT NOT IN RELEVANCE_QUERY_DICT
-        # if curr_rel_doc_int in relevance_query_dict:
+        if curr_rel_doc_int not in relevance_query_dict:
+            continue
         tuple_of_uniqueWordId_termFreqs = relevance_query_dict[curr_rel_doc_int]
+        # print("curr_rel_doc_int",curr_rel_doc_int)
         temp_storage_relDocs = {} #temp storage of tf-idf values before normalisation. so we can add to rel_docs_vector after normalising
         normalisation_counter = 0
         for var_byte_string in tuple_of_uniqueWordId_termFreqs: #unique words in each doc
-            id, tf = decode_varbyte_string(var_byte_string)
+            # id, tf = decode_varbyte_string(var_byte_string)
+            ls = decode_varbyte_string(var_byte_string)
+            if len(ls) == 1:
+                id = 0
+                tf = ls[0]
+            else:
+                id, tf = decode_varbyte_string(var_byte_string)
             word = in_memory_dictionary_sorted_list[id][0]
             df = in_memory_dictionary[word][0]
             curr_tfIdf = relevance_query_calculate_tf_idf_nonNormalised(tf, df, N)
@@ -581,8 +647,8 @@ def perform_relevance_query(curr_query_term_freq, curr_query_term_freq_mapping, 
 def relevance_query_calculate_tf_idf_nonNormalised (tf, df, N):
         tf = 1 + math.log10(tf)
         idf = math.log10(N/df)
-        #CHECK: IDF < 0.1
-        if (idf < 0.1):
+        #CHECK: IDF < 0.25
+        if (idf < 0.25):
             idf = 0
         tf_idf = tf * idf
         return tf_idf
