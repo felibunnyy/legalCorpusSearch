@@ -97,7 +97,7 @@ def preprocess_text(text_to_process):
     text_to_process = ''.join(char for char in text_to_process if char.isalnum() or char.isspace())
     return text_to_process
 
-def update_index(index, docID, tokens, eachDocId_length_for_normalisation):
+def update_index(index, docID, tokens, eachDocId_length_for_normalisation, raw_doc_length_dict):
     """
     Add token to index, calculate length of doc
     """
@@ -125,6 +125,11 @@ def update_index(index, docID, tokens, eachDocId_length_for_normalisation):
           eachDocId_length_for_normalisation[token] = 1
       else:
           eachDocId_length_for_normalisation[token] += 1
+      
+      if docID not in raw_doc_length_dict:
+          raw_doc_length_dict[docID] = 1
+      else:
+          raw_doc_length_dict[docID] += 1
 
 def calculate_normalised_length(eachDocId_length_for_normalisation):
     temp = 0
@@ -149,7 +154,7 @@ def build_index(in_file, out_dict, out_postings):
     final_calculated_normalised_length = {}
                 
     full_doc_ids = []
-    
+    raw_doc_length_dict = {}
     ##ZONES AND FIELDS
     # note: court name processing is only 'to_lower'
     courts_most_impt = ["SG Court of Appeal", "SG Privy Council", "UK House of Lords", "UK Supreme Court",
@@ -211,7 +216,7 @@ def build_index(in_file, out_dict, out_postings):
         text_to_process = preprocess_text(text_to_process) #processing done
         
         tokens = get_term(text_to_process)
-        update_index(index, docID, tokens, eachDocId_length_for_normalisation)
+        update_index(index, docID, tokens, eachDocId_length_for_normalisation, raw_doc_length_dict)
         
 
         # calculate final_calculated_normalised_length for current docId
@@ -290,6 +295,7 @@ def build_index(in_file, out_dict, out_postings):
         
         ##dump relevance_query_dict
         pickle.dump(relevance_query_dict, index_file, protocol = pickle.HIGHEST_PROTOCOL)
+        pickle.dump(raw_doc_length_dict, index_file, protocol = pickle.HIGHEST_PROTOCOL)
     
     print('done')
     print ("Execution Time:" + str(time.time() - startTime) + "s")
