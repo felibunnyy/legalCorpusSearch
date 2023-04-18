@@ -64,7 +64,7 @@ def encode_tuple(tuple_val):
     # concatenate the byte arrays and return the result
     return b"".join(encoded_values)    
       
-# python3 index2.py -i dataset.csv -d dictionary_file10 -p postings_file10
+# python3 index2.py -i dataset.csv -d dictionary_file14 -p postings_file14
 def install_package(package):
     try:
         importlib.import_module(package)
