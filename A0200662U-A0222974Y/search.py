@@ -443,10 +443,9 @@ def run_search(dictionary_file, postings_file, query_file, results_file):
             #take from end of results
             diff = 2000 - length_non_relevant_docs_from_initial_search
             non_relevant_docs_from_initial_search += results[-diff:]
-        """                                
-            
-        if len(results) > 1700:
-            results = results[:1700]
+        """                                    
+        # if len(results) > 1700:
+        #     results = results[:1700]
         
         """
         ###use rocchio's formula here
@@ -501,12 +500,20 @@ def perform_relevance_query(curr_query_term_freq, curr_query_term_freq_mapping, 
     
         curr_rel_doc_int = int(curr_rel_doc) #convert from string to integer
         #ACCOUNT FOR WHEN CURR_REL_DOC_INT NOT IN RELEVANCE_QUERY_DICT
-        # if curr_rel_doc_int in relevance_query_dict:
+        if curr_rel_doc_int in relevance_query_dict:
+            continue
         tuple_of_uniqueWordId_termFreqs = relevance_query_dict[curr_rel_doc_int]
         temp_storage_relDocs = {} #temp storage of tf-idf values before normalisation. so we can add to rel_docs_vector after normalising
         normalisation_counter = 0
         for var_byte_string in tuple_of_uniqueWordId_termFreqs: #unique words in each doc
-            id, tf = decode_varbyte_string(var_byte_string)
+            ls = decode_varbyte_string(var_byte_string)
+            if (len(ls) == 1):
+                id = 0
+                tf = ls[0]
+            elif (len(ls) == 2):
+                id, tf = ls
+            else:
+                raise ValueError
             word = in_memory_dictionary_sorted_list[id][0]
             df = in_memory_dictionary[word][0]
             curr_tfIdf = relevance_query_calculate_tf_idf_nonNormalised(tf, df, N)
