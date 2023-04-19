@@ -286,7 +286,7 @@ def build_index(in_file, out_dict, out_postings):
     with open(out_dict, "wb") as index_file:
         pickle.dump(output_dict, index_file, protocol = pickle.HIGHEST_PROTOCOL)
         pickle.dump(full_doc_ids, index_file, protocol = pickle.HIGHEST_PROTOCOL)
-        final_calculated_normalised_length = [] #useless
+        # final_calculated_normalised_length = [] #useless
         pickle.dump(final_calculated_normalised_length, index_file, protocol = pickle.HIGHEST_PROTOCOL)
         pickle.dump(zones_and_fields_dict, index_file, protocol = pickle.HIGHEST_PROTOCOL)
         pickle.dump(court_mapping, index_file, protocol = pickle.HIGHEST_PROTOCOL)
