@@ -11,6 +11,7 @@ from collections import OrderedDict
 
 from nltk.tokenize import word_tokenize
 from nltk import stem
+from nltk.corpus import stopwords
 
 import importlib
 import pip
@@ -56,7 +57,7 @@ def update_index(index, docID, tokens, eachDocId_length_for_normalisation):
         if(token not in index):
             # Add term to index
             plist = PostingList()
-            plist.insertNode(docID, positional_index)
+            plist.insertNode(docID, positional_index) #first positional index
             index[token] = plist
         else:
             # Update index
@@ -85,18 +86,25 @@ def build_index(in_file, out_dict, out_postings):
 
     data = pd.read_csv(in_file)
     data = data.sort_values('document_id')
-
-    data = data.head(10)
+    
     # print(data)
 
     index = {}
+    
     final_calculated_normalised_length = {}
-
+    full_doc_ids = []
+    
     for idx, row in data.iterrows():
         eachDocId_length_for_normalisation = {}
         docID = row['document_id']
+        full_doc_ids.append(docID)
 
-        tokens = get_term(row['content'])
+        #preprocess text:
+        text_to_process = row['content']
+        text_to_process = text_to_process.replace('\n', ' ')
+        text_to_process = ''.join(char for char in text_to_process if char.isalnum() or char.isspace())
+        
+        tokens = get_term(text_to_process)
         update_index(index, docID, tokens, eachDocId_length_for_normalisation)
 
         # calculate final_calculated_normalised_length for current docId
@@ -118,7 +126,7 @@ def build_index(in_file, out_dict, out_postings):
 
     print('finished dumping post file')
 
-    full_doc_ids = len(data)
+    full_doc_ids = tuple(full_doc_ids)
 
 
     # postlist_file contains posting list dumped

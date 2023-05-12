@@ -3,20 +3,24 @@ import math
 # Node class
 class Node:
     # Function to initialize the node object
-    def __init__(self, key, position):
-        self.data = key
-        self.tf = 1
-        self.positions = [position]
+    def __init__(self):
+        self.data = None 
         self.next = None
         self.skip = None
-        
-    def addPosition(self, position):
-        self.positions.append(position) #does not check if position already exists (save time)
+    
+    def getHead(self):
+        return self.head
+    
+    def getSkip(self):
+        return self.skip
     
     # Function to view node
     def __str__(self):
-        res = "({}, {}): {}".format(self.data, self.tf, self.positions)
-        return res
+        currNode = self.data
+        nextNode = self.next.data if self.next is not None else None
+        skipNode = self.skip.data if self.skip is not None else None
+        data = [currNode, nextNode, skipNode]
+        return "%s" %(' -> '.join(str(i) for i in data))
 
     def __repr__(self):
         return self.__str__()
@@ -27,88 +31,100 @@ class PostingList:
     # (based on Linked List with skip pointers)
     def __init__(self):
         self.head = None
-        self.tail = None
-        self.df = 0
+        self.length = 0
 
     # Function to view list
     def __str__(self):
-        res = []
+        data = []
         curr = self.head
         while curr is not None:
-            res.append(str(curr))
+            data.append(curr.data)
             curr = curr.next
-        return '; '.join(map(str, res))
+        return "[%s]" %(', '.join(str(i) for i in data))
 
     def __repr__(self):
         return self.__str__()
 
-    # insert to the end of the list since document id is already in sorted order
-    def insertNode(self, data, position = 0):
-        if self.head is None:
-            n = Node(data, position)
-            # n.data = data
-            # n.addPosition(position)
+    # Add new docID
+    def addNode(self, data):
+        curr = self.head
+        # Empty list / reach end of list, create new Node
+        if curr is None:
+            n = Node()
+            n.data = data
             self.head = n
-            self.tail = n
-            self.df += 1
-            return
-        
-        curr = self.tail
-        
-        if curr.data == data:
-            curr.addPosition(position)
-            curr.tf += 1
-            return
-        
-        if curr.data < data:
-            n = Node(data, position)
-            curr.next = n
-            self.tail = n
-            self.df += 1
+            self.length += 1
             return
 
-    # Add evenly spaced pointers to posting list   
+        # input docID is smaller than current pointer, insert before current
+        if curr.data > data:
+            n = Node()
+            n.data = data
+            n.next = curr
+            self.head = n
+            self.length += 1
+            return
+
+        if curr.data == data:
+            return
+
+        # input docID is larger than current pointer, move forward
+        while curr.next is not None:
+            if curr.next.data == data:
+                return
+            if curr.next.data > data:
+                break
+            curr = curr.next
+        n = Node()
+        n.data = data
+        n.next = curr.next
+        curr.next = n
+        self.length += 1
+        return
+
+    # Assign evenly spaced pointers to each node in the list
     def addSkipPointer(self):
-        skip = math.floor(math.sqrt(self.df))
+        skip = math.floor(math.sqrt(self.length))
         n = 0
         curr = self.head
-        skip_temp = curr
-
-        while (n + skip < self.df):
-            initial_skip_temp = skip_temp
-            for i in range(skip):
+        while (n < self.length) & (n + skip < self.length):
+            skip_temp = curr
+            for i in range(skip): 
                 skip_temp = skip_temp.next
-            initial_skip_temp.skip = skip_temp
+            curr.skip = skip_temp
+            curr = curr.skip
             n += skip
         return
 
-"""
-test = Node(5, 1)
-#print out --> (docID, termFreq): [positional indices]
---> (5, 1): [1] 
-
-test = PostingList()
-test.addNode(5, 1)
-test.addNode(5, 4)
-test.addNode(7, 1)
-test.addNode(7, 2)
-test.addNode(7, 3)
-test.addNode(8, 100)
-#print out --> (docID_1, termFreq): [positional indices]; (docID_2, termFreq): [positional indices]; ...
---> (5, 2): [1, 4]; (7, 3): [1, 2, 3]; (8, 1): [1, 100]
-"""
-
-"""
->>> from postlist import *
->>> pl = PostingList()
->>> pl.insertNode(1,2)
-(1, 1): [2]
->>> pl.insertNode(2,2)
->>> pl.insertNode(3,2)
->>> pl.insertNode(4,2)
->>> pl.insertNode(5,2)
->>> pl.insertNode(6,2)
->>> pl.insertNode(6,3)
->>> pl
-(1, 1): [2]; (2, 1): [2]; (3, 1): [2]; (4, 1): [2]; (5, 1): [2]; (6, 2): [2, 3]
-"""
+def mergeLists(headA, headB):
+ 
+    # A dummy node to store the result
+    dummyNode = Node(0)
+ 
+    # Tail stores the last node
+    tail = dummyNode
+    while True:
+ 
+        # If any of the list gets completely empty
+        # directly join all the elements of the other list
+        if headA is None:
+            tail.next = headB
+            break
+        if headB is None:
+            tail.next = headA
+            break
+ 
+        # Compare the data of the lists and whichever is smaller is
+        # appended to the last of the merged list and the head is changed
+        if headA.data <= headB.data:
+            tail.next = headA
+            headA = headA.next
+        else:
+            tail.next = headB
+            headB = headB.next
+ 
+        # Advance the tail
+        tail = tail.next
+ 
+    # Returns the head of the merged list
+    return dummyNode.next
